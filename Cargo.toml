@@ -1,6 +1,6 @@
 [package]
 name = "smol-attributes"
-description = "Experimental language-level polyfills for Async Rust."
+description = "Proc macro for smol runtime."
 license = "MIT OR Apache-2.0"
 version = "0.1.0"
 authors = ["YuWeiWu <wusyong9104@gmail.com>"]
