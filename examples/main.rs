@@ -1,6 +1,6 @@
 use smol::Task;
 
-#[smol_attributes::main]
+#[smol_potat::main]
 async fn main() {
     Task::spawn(async {
         println!("Hello, world!");
