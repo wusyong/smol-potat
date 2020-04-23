@@ -1,5 +1,5 @@
 [package]
-name = "smol-attributes"
+name = "smol-potat"
 description = "Proc macro for smol runtime."
 license = "MIT OR Apache-2.0"
 version = "0.1.0"
@@ -13,3 +13,4 @@ proc-macro = true
 syn = { version = "1.0", features = ["full"] }
 quote = "1.0"
 smol = "0.0.1"
+#smol = { path = "../smol" }
