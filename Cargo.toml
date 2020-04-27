@@ -2,7 +2,7 @@
 name = "smol-potat"
 description = "Proc macro for smol runtime."
 license = "MIT OR Apache-2.0"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["YuWeiWu <wusyong9104@gmail.com>"]
 edition = "2018"
 
@@ -12,5 +12,4 @@ proc-macro = true
 [dependencies]
 syn = { version = "1.0", features = ["full"] }
 quote = "1.0"
-#smol = "0.0.1"
-smol = { path = "../smol" }
+smol = "0.1"
