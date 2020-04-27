@@ -1,4 +1,11 @@
 # smol-potat
+
+[![][crates-badge]][crates-url] ![][license-badge]
+
+[crates-badge]: https://img.shields.io/crates/v/smol-potat
+[crates-url]: https://crates.io/crates/smol-potat
+[license-badge]: https://img.shields.io/crates/l/smol-potat
+
 Proc macro for smol runtime.
 
 ![](https://i.redd.it/arnr6d62b9p21.jpg)
