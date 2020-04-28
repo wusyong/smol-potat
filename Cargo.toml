@@ -2,10 +2,13 @@
 name = "smol-potat"
 description = "Proc macro for smol runtime."
 license = "MIT OR Apache-2.0"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["YuWeiWu <wusyong9104@gmail.com>"]
 edition = "2018"
 readme = "README.md"
+repository = "https://github.com/wusyong/smol-potat"
+homepage = "https://github.com/wusyong/smol-potat"
+documentation = "https://docs.rs/smol-potat"
 
 [lib]
 proc-macro = true
