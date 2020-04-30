@@ -10,8 +10,19 @@ use syn::spanned::Spanned;
 ///
 /// # Examples
 ///
+/// By default, this spawns the single thread executor.
+///
 /// ```ignore
-/// #[smol::main]
+/// #[smol_potat::main]
+/// async fn main() -> std::io::Result<()> {
+///     Ok(())
+/// }
+/// ```
+/// 
+/// For multi-threads, first make sure `futures` crate is imported. And then add this to the attribute:
+///
+/// ```ignore
+/// #[smol_potat::main(threads=3)]
 /// async fn main() -> std::io::Result<()> {
 ///     Ok(())
 /// }
@@ -120,7 +131,7 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Examples
 ///
 /// ```ignore
-/// #[smol::test]
+/// #[smol_potat::test]
 /// async fn my_test() -> std::io::Result<()> {
 ///     assert_eq!(2 * 2, 4);
 ///     Ok(())
@@ -160,7 +171,7 @@ pub fn test(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #![feature(test)]
 /// extern crate test;
 ///
-/// #[smol::bench]
+/// #[smol_potat::bench]
 /// async fn bench() {
 ///     println!("hello world");
 /// }
