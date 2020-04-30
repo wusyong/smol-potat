@@ -18,14 +18,56 @@ use syn::spanned::Spanned;
 /// ```
 #[cfg(not(test))] // NOTE: exporting main breaks tests, we should file an issue.
 #[proc_macro_attribute]
-pub fn main(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as syn::ItemFn);
+    let args = syn::parse_macro_input!(attr as syn::AttributeArgs);
 
     let ret = &input.sig.output;
     let inputs = &input.sig.inputs;
     let name = &input.sig.ident;
     let body = &input.block;
     let attrs = &input.attrs;
+    let mut threads = None;
+
+    for arg in args {
+        match arg {
+            syn::NestedMeta::Meta(syn::Meta::NameValue(namevalue)) => {
+                let ident = namevalue.path.get_ident();
+                if ident.is_none() {
+                    return TokenStream::from(quote_spanned! { ident.span() =>
+                        compile_error!("Must have specified ident"),
+                    });
+                }
+                match ident.unwrap().to_string().to_lowercase().as_str() {
+                    "threads" => {
+                        match &namevalue.lit {
+                            syn::Lit::Int(expr) => {
+                                let num = expr.base10_parse::<u32>().unwrap();
+                                if num > 1 {
+                                    threads = Some(num);
+                                }
+                            }
+                            _ => {
+                                return TokenStream::from(quote_spanned! { namevalue.span() =>
+                                    compile_error!("threads argument must be an int"),
+                                });
+                            }
+                        }
+                    }
+                    name => {
+                        return TokenStream::from(quote_spanned! { name.span() =>
+                            compile_error!("Unknown attribute pair {} is specified; expected: `threads`"),
+                        });
+                    }
+                }
+            }
+            other => {
+                return TokenStream::from(quote_spanned! { other.span() =>
+                    compile_error!("Unknown attribute inside the macro"),
+                });
+            }
+        }
+    }
 
     if name != "main" {
         return TokenStream::from(quote_spanned! { name.span() =>
@@ -39,18 +81,35 @@ pub fn main(_attr: TokenStream, item: TokenStream) -> TokenStream {
         });
     }
 
-    let result = quote! {
-        fn main() #ret {
-            #(#attrs)*
-            async fn main(#inputs) #ret {
-                #body
+    let result = match threads {
+        Some(num) => quote! {
+            fn main() #ret {
+                #(#attrs)*
+                async fn main(#inputs) #ret {
+                    #body
+                }
+
+                for _ in 0..#num {
+                    std::thread::spawn(|| smol::run(futures::future::pending::<()>()));
+                }
+    
+                smol::block_on(async {
+                    main().await
+                })
             }
-
-            smol::run(async {
-                main().await
-            })
+        },
+        _ => quote! {
+            fn main() #ret {
+                #(#attrs)*
+                async fn main(#inputs) #ret {
+                    #body
+                }
+    
+                smol::run(async {
+                    main().await
+                })
+            }
         }
-
     };
 
     result.into()
