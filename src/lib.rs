@@ -19,7 +19,7 @@ use syn::spanned::Spanned;
 /// }
 /// ```
 ///
-/// For multi-threads, first make sure `futures` crate is imported. And then add this to the attribute:
+/// For multi-threads, add this to the attribute:
 ///
 /// ```ignore
 /// #[smol_potat::main(threads=3)]
