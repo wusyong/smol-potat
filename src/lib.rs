@@ -18,8 +18,8 @@ use syn::spanned::Spanned;
 ///     Ok(())
 /// }
 /// ```
-///
-/// For multi-threads, add this to the attribute:
+/// 
+/// For multi-threads, first make sure `futures` crate is imported. And then add this to the attribute:
 ///
 /// ```ignore
 /// #[smol_potat::main(threads=3)]
@@ -50,19 +50,21 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                 }
                 match ident.unwrap().to_string().to_lowercase().as_str() {
-                    "threads" => match &namevalue.lit {
-                        syn::Lit::Int(expr) => {
-                            let num = expr.base10_parse::<u32>().unwrap();
-                            if num > 1 {
-                                threads = Some(num);
+                    "threads" => {
+                        match &namevalue.lit {
+                            syn::Lit::Int(expr) => {
+                                let num = expr.base10_parse::<u32>().unwrap();
+                                if num > 1 {
+                                    threads = Some(num);
+                                }
+                            }
+                            _ => {
+                                return TokenStream::from(quote_spanned! { namevalue.span() =>
+                                    compile_error!("threads argument must be an int"),
+                                });
                             }
                         }
-                        _ => {
-                            return TokenStream::from(quote_spanned! { namevalue.span() =>
-                                compile_error!("threads argument must be an int"),
-                            });
-                        }
-                    },
+                    }
                     name => {
                         return TokenStream::from(quote_spanned! { name.span() =>
                             compile_error!("Unknown attribute pair {} is specified; expected: `threads`"),
@@ -113,7 +115,7 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
                 for _ in 0..#num {
                     std::thread::spawn(|| smol::run(Pending));
                 }
-
+    
                 smol::block_on(async {
                     main().await
                 })
@@ -125,12 +127,12 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
                 async fn main(#inputs) #ret {
                     #body
                 }
-
+    
                 smol::run(async {
                     main().await
                 })
             }
-        },
+        }
     };
 
     result.into()
