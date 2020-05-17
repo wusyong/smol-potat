@@ -100,7 +100,7 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
                     #body
                 }
 
-                pub struct Pending;
+                struct Pending;
 
                 impl std::future::Future for Pending {
                     type Output = ();
