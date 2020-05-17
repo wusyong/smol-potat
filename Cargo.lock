@@ -349,7 +349,7 @@ dependencies = [
 
 [[package]]
 name = "smol-potat"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "num_cpus",
  "smol",
@@ -361,7 +361,6 @@ name = "smol-potat-macro"
 version = "0.2.1"
 dependencies = [
  "quote",
- "smol",
  "syn",
 ]
 

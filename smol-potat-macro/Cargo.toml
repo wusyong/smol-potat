@@ -19,6 +19,3 @@ auto = []
 [dependencies]
 syn = { version = "1.0", features = ["full"] }
 quote = "1.0"
-
-[dev-dependencies]
-smol = "0.1"
