@@ -19,7 +19,7 @@ use syn::spanned::Spanned;
 /// }
 /// ```
 /// 
-/// For multi-threads, first make sure `futures` crate is imported. And then add this to the attribute:
+/// For multi-threads, add this to the attribute:
 ///
 /// ```ignore
 /// #[smol_potat::main(threads=3)]
@@ -100,8 +100,20 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
                     #body
                 }
 
+                struct Pending;
+
+                impl std::future::Future for Pending {
+                    type Output = ();
+                    fn poll(
+                        self: std::pin::Pin<&mut Self>,
+                        _cx: &mut std::task::Context<'_>,
+                    ) -> std::task::Poll<Self::Output> {
+                        std::task::Poll::Pending
+                    }
+                }
+
                 for _ in 0..#num {
-                    std::thread::spawn(|| smol::run(futures::future::pending::<()>()));
+                    std::thread::spawn(|| smol::run(Pending));
                 }
     
                 smol::block_on(async {

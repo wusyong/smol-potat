@@ -26,8 +26,6 @@ async fn main() {
 
 ### Multi threads
 
-[futures](https://crates.io/crates/futures) is required because of using [`pending()`](https://docs.rs/futures/0.3.4/futures/future/fn.pending.html)
-
 ```rust
 #[smol_potat::main(threads=3)]
 async fn main() {
