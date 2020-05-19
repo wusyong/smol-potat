@@ -10,17 +10,15 @@ repository = "https://github.com/wusyong/smol-potat"
 homepage = "https://github.com/wusyong/smol-potat"
 documentation = "https://docs.rs/smol-potat"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[workspace]
-members = [
-    ".", "smol-potat-macro"
-]
-
 [dependencies]
-smol-potat-macro = {path = "smol-potat-macro"}
+smol-potat-derive = {path = "smol-potat-derive"}
 num_cpus = { version = "1.13.0", optional = true }
 smol = "0.1.8"
 
 [features]
-auto = ["smol-potat-macro/auto", "num_cpus"]
+auto = ["smol-potat-derive/auto", "num_cpus"]
+
+[workspace]
+members = [
+    "smol-potat-derive"
+]

@@ -343,11 +343,11 @@ version = "0.2.1"
 dependencies = [
  "num_cpus",
  "smol",
- "smol-potat-macro",
+ "smol-potat-derive",
 ]
 
 [[package]]
-name = "smol-potat-macro"
+name = "smol-potat-derive"
 version = "0.2.1"
 dependencies = [
  "quote",

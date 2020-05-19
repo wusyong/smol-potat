@@ -1,4 +1,4 @@
-pub use smol_potat_macro::{main, bench, test};
+pub use smol_potat_derive::{main, bench, test};
 #[cfg(feature="auto")]
 pub use num_cpus;
 #[doc(hidden)]
