@@ -169,19 +169,6 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
                 })
             }
         },
-        #[cfg(not(feature = "auto"))]
-        _ => quote! {
-            fn main() #ret {
-                #(#attrs)*
-                async fn main(#inputs) #ret {
-                    #body
-                }
-    
-                smol_potat::run(async {
-                    main().await
-                })
-            }
-        }
     };
 
     result.into()
