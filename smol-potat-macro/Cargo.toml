@@ -1,5 +1,5 @@
 [package]
-name = "smol-potat"
+name = "smol-potat-macro"
 description = "Proc macro for smol runtime."
 license = "MIT OR Apache-2.0"
 version = "0.2.1"
@@ -10,17 +10,12 @@ repository = "https://github.com/wusyong/smol-potat"
 homepage = "https://github.com/wusyong/smol-potat"
 documentation = "https://docs.rs/smol-potat"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[workspace]
-members = [
-    ".", "smol-potat-macro"
-]
-
-[dependencies]
-smol-potat-macro = {path = "smol-potat-macro"}
-num_cpus = { version = "1.13.0", optional = true }
-smol = "0.1.5"
+[lib]
+proc-macro = true
 
 [features]
-auto = ["smol-potat-macro/auto", "num_cpus"]
+auto = []
+
+[dependencies]
+syn = { version = "1.0", features = ["full"] }
+quote = "1.0"
