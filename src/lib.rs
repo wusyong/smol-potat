@@ -1,5 +1,8 @@
-pub use smol_potat_derive::{main, bench, test};
-#[cfg(feature="auto")]
+pub use async_io as io;
+pub use async_net as net;
+pub use blocking;
+pub use futures_lite as futures;
+pub use multitask;
 pub use num_cpus;
-#[doc(hidden)]
-pub use smol::{run, block_on};
+pub use smol_potat_macro::{main, bench, test};
+pub use smol::*;
