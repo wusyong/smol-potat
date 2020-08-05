@@ -97,7 +97,7 @@ pub fn main(_attr: TokenStream, item: TokenStream) -> TokenStream {
             // })
             /////
 
-            smol_potat::blocking::block_on(async {
+            smol_potat::run(async {
                 main().await
             });
         }
@@ -136,7 +136,7 @@ pub fn test(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[test]
         #(#attrs)*
         fn #name() #ret {
-            let _ = smol_potat::Task::spawn(async { #body });
+            let _ = smol_potat::run(async { #body });
         }
     };
 
@@ -183,7 +183,7 @@ pub fn bench(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #(#attrs)*
         fn #name(b: &mut test::Bencher) #ret {
             let _ = b.iter(|| {
-                smol_potat::Task::spawn(async { #body })
+                smol_potat::run(async { #body })
             });
         }
     };
