@@ -136,7 +136,7 @@ pub fn test(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[test]
         #(#attrs)*
         fn #name() #ret {
-            let _ = smol_potat::run(async { #body });
+            smol_potat::run(async { #body })
         }
     };
 
