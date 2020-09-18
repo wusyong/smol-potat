@@ -46,18 +46,58 @@ use syn::spanned::Spanned;
 /// ```
 #[cfg(not(test))] // NOTE: exporting main breaks tests, we should file an issue.
 #[proc_macro_attribute]
-pub fn main(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as syn::ItemFn);
+    let args = syn::parse_macro_input!(attr as syn::AttributeArgs);
 
     let ret = &input.sig.output;
     let inputs = &input.sig.inputs;
     let name = &input.sig.ident;
     let body = &input.block;
     let attrs = &input.attrs;
+    let mut threads = None;
+
+    for arg in args {
+        match arg {
+            syn::NestedMeta::Meta(syn::Meta::NameValue(namevalue)) => {
+                let ident = namevalue.path.get_ident();
+                if ident.is_none() {
+                    return TokenStream::from(quote_spanned! { ident.span() =>
+                        compile_error!("Must have specified ident"),
+                    });
+                }
+                match ident.unwrap().to_string().to_lowercase().as_str() {
+                    "threads" => match &namevalue.lit {
+                        syn::Lit::Int(expr) => {
+                            let num = expr.base10_parse::<u32>().unwrap();
+                            if num > 1 {
+                                threads = Some(num);
+                            }
+                        }
+                        _ => {
+                            return TokenStream::from(quote_spanned! { namevalue.span() =>
+                                compile_error!("threads argument must be an int"),
+                            });
+                        }
+                    },
+                    name => {
+                        return TokenStream::from(quote_spanned! { name.span() =>
+                            compile_error!("Unknown attribute pair {} is specified; expected: `threads`"),
+                        });
+                    }
+                }
+            }
+            other => {
+                return TokenStream::from(quote_spanned! { other.span() =>
+                    compile_error!("Unknown attribute inside the macro"),
+                });
+            }
+        }
+    }
 
     if name != "main" {
         return TokenStream::from(quote_spanned! { name.span() =>
-            compile_error!("only the main function can be tagged with #[smol_potat::main]"),
+            compile_error!("only the main function can be tagged with #[smol::main]"),
         });
     }
 
@@ -67,40 +107,69 @@ pub fn main(_attr: TokenStream, item: TokenStream) -> TokenStream {
         });
     }
 
-    let result = quote! {
-        fn main() #ret {
-            #(#attrs)*
-            async fn main(#inputs) #ret {
-                #body
-            }
-
-            struct Pending;
-
-            impl std::future::Future for Pending {
-                type Output = ();
-                fn poll(
-                    self: std::pin::Pin<&mut Self>,
-                    _cx: &mut std::task::Context<'_>,
-                ) -> std::task::Poll<Self::Output> {
-                    std::task::Poll::Pending
+    let result = match threads {
+        Some(num) => quote! {
+            fn main() #ret {
+                #(#attrs)*
+                async fn main(#inputs) #ret {
+                    #body
                 }
+
+                let ex = smol_potat::async_executor::Executor::new();
+                let (signal, shutdown) = smol_potat::async_channel::unbounded::<()>();
+
+                let (_, r) = smol_potat::easy_parallel::Parallel::new()
+                    // Run four executor threads.
+                    .each(0..#num, |_| smol_potat::futures_lite::future::block_on(ex.run(shutdown.recv())))
+                    // Run the main future on the current thread.
+                    .finish(|| smol_potat::futures_lite::future::block_on(async {
+                        let r = main().await;
+                        drop(signal);
+                        r
+                    }));
+
+                r
             }
+        },
+        #[cfg(feature = "auto")]
+        _ => quote! {
+            fn main() #ret {
+                #(#attrs)*
+                async fn main(#inputs) #ret {
+                    #body
+                }
 
-            // let num_cpus = smol_potat::num_cpus::get().max(1);
+                let ex = smol_potat::async_executor::Executor::new();
+                let (signal, shutdown) = smol_potat::async_channel::unbounded::<()>();
 
-            // for _ in 0..num_cpus {
-            //     std::thread::spawn(|| smol_potat::run(Pending));
-            // }
+                let num_cpus = smol_potat::num_cpus::get().max(1);
 
-            // smol_potat::block_on(async {
-            //     main().await
-            // })
-            /////
+                let (_, r) = smol_potat::easy_parallel::Parallel::new()
+                    // Run four executor threads.
+                    .each(0..num_cpus, |_| smol_potat::futures_lite::future::block_on(ex.run(shutdown.recv())))
+                    // Run the main future on the current thread.
+                    .finish(|| smol_potat::futures_lite::future::block_on(async {
+                        let r = main().await;
+                        drop(signal);
+                        r
+                    }));
 
-            smol_potat::run(async {
-                main().await
-            });
-        }
+                r
+            }
+        },
+        #[cfg(not(feature = "auto"))]
+        _ => quote! {
+            fn main() #ret {
+                #(#attrs)*
+                async fn main(#inputs) #ret {
+                    #body
+                }
+
+                smol_potat::block_on(async {
+                    main().await
+                })
+            }
+        },
     };
 
     result.into()
@@ -136,7 +205,7 @@ pub fn test(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[test]
         #(#attrs)*
         fn #name() #ret {
-            let _ = smol_potat::run(async { #body });
+            smol::block_on(async { #body })
         }
     };
 
@@ -183,7 +252,9 @@ pub fn bench(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #(#attrs)*
         fn #name(b: &mut test::Bencher) #ret {
             let _ = b.iter(|| {
-                smol_potat::run(async { #body })
+                smol::block_on(async {
+                    #body
+                })
             });
         }
     };

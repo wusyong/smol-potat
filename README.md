@@ -15,6 +15,32 @@ Usage is similar to what you do in `tokio` and `async-std`.
 
 ## Usage
 
+### Single thread
+
+```rust
+#[smol_potat::main]
+async fn main() {
+    println!("Hello, world!");
+}
+```
+
+### Multi threads
+
+```rust
+#[smol_potat::main(threads=3)]
+async fn main() {
+    println!("Hello, world!");
+}
+```
+
+### Auto thread generation
+
+Enable `auto` feature and the rest is same as single thread:
+
+```
+smol_potat = { version = "1", features = ["auto"] }
+```
+
 ```rust
 #[smol_potat::main]
 async fn main() {

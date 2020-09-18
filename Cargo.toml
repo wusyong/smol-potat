@@ -2,7 +2,7 @@
 name = "smol-potat"
 description = "Proc macro for smol runtime."
 license = "MIT OR Apache-2.0"
-version = "0.5.0"
+version = "1.0.0"
 authors = ["YuWeiWu <wusyong9104@gmail.com>"]
 edition = "2018"
 readme = "README.md"
@@ -11,9 +11,17 @@ homepage = "https://github.com/wusyong/smol-potat"
 documentation = "https://docs.rs/smol-potat"
 
 [dependencies]
-num_cpus = "1.13"
-smol-potat-macro = { version = "0.3", path = "smol-potat-macro"}
-smol = "0.3"
+smol-potat-macro = { version = "0.4", path = "smol-potat-macro"}
+num_cpus = { version = "1.13", optional = true }
+smol = "1.0"
+async-channel = "1.4"
+async-executor = "1.1"
+futures-lite = "1.7"
+easy-parallel = "3.1"
+
+
+[features]
+auto = ["smol-potat-macro/auto", "num_cpus"]
 
 [workspace]
 members = [
