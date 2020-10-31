@@ -1,3 +1,5 @@
+//! Attribute macros for [`smol`](https://github.com/stjepang/smol).
+
 #[doc(hidden)]
 pub use async_channel;
 #[doc(hidden)]

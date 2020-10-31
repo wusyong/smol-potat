@@ -3,7 +3,9 @@
 #![recursion_limit = "512"]
 
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use quote::{quote, quote_spanned};
+use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 
 /// Enables an async main function.
@@ -44,60 +46,41 @@ use syn::spanned::Spanned;
 ///     Ok(())
 /// }
 /// ```
-#[cfg(not(test))] // NOTE: exporting main breaks tests, we should file an issue.
+///
+/// ## Set the crate root
+///
+/// By default `smol-potat` will use `::smol_potat` as its crate root, but you can override this
+/// with the `crate` option:
+///
+/// ```ignore
+/// use smol_potat as other_smol_potat;
+///
+/// #[smol_potat::main(crate = "other_smol_potat")]
+/// async fn main() -> std::io::Result<()> {
+///     Ok(())
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as syn::ItemFn);
-    let args = syn::parse_macro_input!(attr as syn::AttributeArgs);
+    let opts = syn::parse_macro_input!(attr as Opts);
 
     let ret = &input.sig.output;
-    let inputs = &input.sig.inputs;
     let name = &input.sig.ident;
     let body = &input.block;
     let attrs = &input.attrs;
-    let mut threads = None;
 
-    for arg in args {
-        match arg {
-            syn::NestedMeta::Meta(syn::Meta::NameValue(namevalue)) => {
-                let ident = namevalue.path.get_ident();
-                if ident.is_none() {
-                    return TokenStream::from(quote_spanned! { ident.span() =>
-                        compile_error!("Must have specified ident"),
-                    });
-                }
-                match ident.unwrap().to_string().to_lowercase().as_str() {
-                    "threads" => match &namevalue.lit {
-                        syn::Lit::Int(expr) => {
-                            let num = expr.base10_parse::<u32>().unwrap();
-                            if num > 1 {
-                                threads = Some(num);
-                            }
-                        }
-                        _ => {
-                            return TokenStream::from(quote_spanned! { namevalue.span() =>
-                                compile_error!("threads argument must be an int"),
-                            });
-                        }
-                    },
-                    name => {
-                        return TokenStream::from(quote_spanned! { name.span() =>
-                            compile_error!("Unknown attribute pair {} is specified; expected: `threads`"),
-                        });
-                    }
-                }
-            }
-            other => {
-                return TokenStream::from(quote_spanned! { other.span() =>
-                    compile_error!("Unknown attribute inside the macro"),
-                });
-            }
-        }
-    }
+    let crate_root = opts.crate_root;
 
     if name != "main" {
         return TokenStream::from(quote_spanned! { name.span() =>
             compile_error!("only the main function can be tagged with #[smol::main]"),
+        });
+    }
+
+    if !input.sig.inputs.is_empty() {
+        return TokenStream::from(quote_spanned! { input.sig.paren_token.span =>
+            compile_error!("the main function cannot take parameters"),
         });
     }
 
@@ -107,48 +90,32 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
         });
     }
 
-    let result = match threads {
-        Some(num) => quote! {
-            fn main() #ret {
-                #(#attrs)*
-                async fn main(#inputs) #ret {
-                    #body
-                }
-
-                let ex = smol_potat::async_executor::Executor::new();
-                let (signal, shutdown) = smol_potat::async_channel::unbounded::<()>();
-
-                let (_, r) = smol_potat::easy_parallel::Parallel::new()
-                    // Run four executor threads.
-                    .each(0..#num, |_| smol_potat::futures_lite::future::block_on(ex.run(shutdown.recv())))
-                    // Run the main future on the current thread.
-                    .finish(|| smol_potat::futures_lite::future::block_on(async {
-                        let r = main().await;
-                        drop(signal);
-                        r
-                    }));
-
-                r
-            }
-        },
+    let threads = match opts.threads {
+        Some((num, span)) => Some(quote_spanned!(span=> #num)),
         #[cfg(feature = "auto")]
-        _ => quote! {
+        None => Some(quote!(::std::cmp::max(#crate_root::num_cpus::get(), 1))),
+        #[cfg(not(feature = "auto"))]
+        None => None,
+    };
+
+    let result = match threads {
+        Some(threads) => quote! {
             fn main() #ret {
                 #(#attrs)*
-                async fn main(#inputs) #ret {
+                async fn main() #ret {
                     #body
                 }
 
-                let ex = smol_potat::async_executor::Executor::new();
-                let (signal, shutdown) = smol_potat::async_channel::unbounded::<()>();
+                let ex = #crate_root::async_executor::Executor::new();
+                let (signal, shutdown) = #crate_root::async_channel::unbounded::<()>();
 
-                let num_cpus = smol_potat::num_cpus::get().max(1);
+                let threads = #threads;
 
-                let (_, r) = smol_potat::easy_parallel::Parallel::new()
-                    // Run four executor threads.
-                    .each(0..num_cpus, |_| smol_potat::futures_lite::future::block_on(ex.run(shutdown.recv())))
+                let (_, r) = #crate_root::easy_parallel::Parallel::new()
+                    // Run the executor threads.
+                    .each(0..threads, |_| #crate_root::futures_lite::future::block_on(ex.run(shutdown.recv())))
                     // Run the main future on the current thread.
-                    .finish(|| smol_potat::futures_lite::future::block_on(async {
+                    .finish(|| #crate_root::futures_lite::future::block_on(async {
                         let r = main().await;
                         drop(signal);
                         r
@@ -157,17 +124,14 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
                 r
             }
         },
-        #[cfg(not(feature = "auto"))]
-        _ => quote! {
+        None => quote! {
             fn main() #ret {
                 #(#attrs)*
-                async fn main(#inputs) #ret {
+                async fn main() #ret {
                     #body
                 }
 
-                smol_potat::block_on(async {
-                    main().await
-                })
+                #crate_root::block_on(main())
             }
         },
     };
@@ -187,14 +151,27 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn test(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn test(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as syn::ItemFn);
+    let opts = syn::parse_macro_input!(attr as Opts);
 
     let ret = &input.sig.output;
     let name = &input.sig.ident;
     let body = &input.block;
     let attrs = &input.attrs;
 
+    let crate_root = opts.crate_root;
+
+    if let Some((_, span)) = opts.threads {
+        return TokenStream::from(quote_spanned! { span=>
+            compile_error!("tests cannot have threads attribute"),
+        });
+    }
+    if !input.sig.inputs.is_empty() {
+        return TokenStream::from(quote_spanned! { input.span() =>
+            compile_error!("tests cannot take parameters"),
+        });
+    }
     if input.sig.asyncness.is_none() {
         return TokenStream::from(quote_spanned! { input.span() =>
             compile_error!("the async keyword is missing from the function declaration"),
@@ -205,7 +182,7 @@ pub fn test(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[test]
         #(#attrs)*
         fn #name() #ret {
-            smol::block_on(async { #body })
+            #crate_root::block_on(async { #body })
         }
     };
 
@@ -226,33 +203,39 @@ pub fn test(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn bench(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn bench(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as syn::ItemFn);
+    let opts = syn::parse_macro_input!(attr as Opts);
 
     let ret = &input.sig.output;
-    let args = &input.sig.inputs;
     let name = &input.sig.ident;
     let body = &input.block;
     let attrs = &input.attrs;
 
+    let crate_root = opts.crate_root;
+
+    if let Some((_, span)) = opts.threads {
+        return TokenStream::from(quote_spanned! { span=>
+            compile_error!("benchmarks cannot have threads attribute"),
+        });
+    }
+    if !input.sig.inputs.is_empty() {
+        return TokenStream::from(quote_spanned! { input.span() =>
+            compile_error!("benchmarks cannot take parameters"),
+        });
+    }
     if input.sig.asyncness.is_none() {
         return TokenStream::from(quote_spanned! { input.span() =>
             compile_error!("the async keyword is missing from the function declaration"),
         });
     }
 
-    if !args.is_empty() {
-        return TokenStream::from(quote_spanned! { args.span() =>
-            compile_error!("async benchmarks don't take any arguments"),
-        });
-    }
-
     let result = quote! {
         #[bench]
         #(#attrs)*
-        fn #name(b: &mut test::Bencher) #ret {
+        fn #name(b: &mut ::test::Bencher) #ret {
             let _ = b.iter(|| {
-                smol::block_on(async {
+                #crate_root::block_on(async {
                     #body
                 })
             });
@@ -260,4 +243,85 @@ pub fn bench(_attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     result.into()
+}
+
+struct Opts {
+    crate_root: syn::Path,
+    threads: Option<(u32, Span)>,
+}
+
+impl Parse for Opts {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let mut crate_root = None;
+        let mut threads = None;
+
+        loop {
+            if input.is_empty() {
+                break;
+            }
+
+            let name_value: syn::MetaNameValue = input.parse()?;
+            let ident = match name_value.path.get_ident() {
+                Some(ident) => ident,
+                None => {
+                    return Err(syn::Error::new_spanned(
+                        name_value.path,
+                        "Must be a single ident",
+                    ))
+                }
+            };
+            match &*ident.to_string().to_lowercase() {
+                "threads" => match &name_value.lit {
+                    syn::Lit::Int(expr) => {
+                        if threads.is_some() {
+                            return Err(syn::Error::new_spanned(
+                                name_value,
+                                "multiple threads argments",
+                            ));
+                        }
+
+                        let num = expr.base10_parse::<std::num::NonZeroU32>()?;
+                        threads = Some((num.get(), expr.span()));
+                    }
+                    _ => {
+                        return Err(syn::Error::new_spanned(
+                            name_value,
+                            "threads argument must be an integer",
+                        ))
+                    }
+                },
+                "crate" => match &name_value.lit {
+                    syn::Lit::Str(path) => {
+                        if crate_root.is_some() {
+                            return Err(syn::Error::new_spanned(
+                                name_value,
+                                "multiple crate arguments",
+                            ));
+                        }
+
+                        crate_root = Some(path.parse()?);
+                    }
+                    _ => {
+                        return Err(syn::Error::new_spanned(
+                            name_value,
+                            "crate argument must be a string",
+                        ))
+                    }
+                },
+                name => {
+                    return Err(syn::Error::new_spanned(
+                        name,
+                        "unknown attribute {}, expected `threads` or `crate`",
+                    ));
+                }
+            }
+
+            input.parse::<Option<syn::Token![,]>>()?;
+        }
+
+        Ok(Self {
+            crate_root: crate_root.unwrap_or_else(|| syn::parse2(quote!(::smol_potat)).unwrap()),
+            threads,
+        })
+    }
 }
