@@ -12,9 +12,10 @@ use syn::spanned::Spanned;
 ///
 /// # Examples
 ///
-/// ## Single-Threaded
+/// ## Dynamic threads
 ///
-/// By default, this spawns the single thread executor.
+/// By default, this spawns as many threads as is in the `SMOL_THREADS` environment variable, or 1
+/// if it is not specified.
 ///
 /// ```ignore
 /// #[smol_potat::main]
@@ -91,49 +92,40 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let threads = match opts.threads {
-        Some((num, span)) => Some(quote_spanned!(span=> #num)),
+        Some((num, span)) => {
+            let num = num.to_string();
+            Some(quote_spanned!(span=> #num))
+        }
         #[cfg(feature = "auto")]
-        None => Some(quote!(::std::cmp::max(#crate_root::num_cpus::get(), 1))),
+        None => Some(quote! {
+            #crate_root::std::string::ToString::to_string(
+                &#crate_root::std::cmp::max(#crate_root::num_cpus::get(), 1)
+            )
+        }),
         #[cfg(not(feature = "auto"))]
         None => None,
     };
 
-    let result = match threads {
-        Some(threads) => quote! {
-            fn main() #ret {
-                #(#attrs)*
-                async fn main() #ret {
-                    #body
-                }
+    let set_threads = threads.map(|threads| {
+        quote! {
+            #crate_root::std::env::set_var(
+                "SMOL_THREADS",
+                #threads,
+            );
+        }
+    });
 
-                let ex = #crate_root::async_executor::Executor::new();
-                let (signal, shutdown) = #crate_root::async_channel::unbounded::<()>();
-
-                let threads = #threads;
-
-                let (_, r) = #crate_root::easy_parallel::Parallel::new()
-                    // Run the executor threads.
-                    .each(0..threads, |_| #crate_root::futures_lite::future::block_on(ex.run(shutdown.recv())))
-                    // Run the main future on the current thread.
-                    .finish(|| #crate_root::futures_lite::future::block_on(async {
-                        let r = main().await;
-                        drop(signal);
-                        r
-                    }));
-
-                r
+    let result = quote! {
+        fn main() #ret {
+            #(#attrs)*
+            async fn main() #ret {
+                #body
             }
-        },
-        None => quote! {
-            fn main() #ret {
-                #(#attrs)*
-                async fn main() #ret {
-                    #body
-                }
 
-                #crate_root::block_on(main())
-            }
-        },
+            #set_threads
+
+            #crate_root::async_io::block_on(main());
+        }
     };
 
     result.into()
@@ -182,7 +174,7 @@ pub fn test(attr: TokenStream, item: TokenStream) -> TokenStream {
         #[test]
         #(#attrs)*
         fn #name() #ret {
-            #crate_root::block_on(async { #body })
+            #crate_root::async_io::block_on(async { #body })
         }
     };
 
@@ -235,7 +227,7 @@ pub fn bench(attr: TokenStream, item: TokenStream) -> TokenStream {
         #(#attrs)*
         fn #name(b: &mut ::test::Bencher) #ret {
             let _ = b.iter(|| {
-                #crate_root::block_on(async {
+                #crate_root::async_io::block_on(async {
                     #body
                 })
             });

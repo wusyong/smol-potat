@@ -1,10 +1,6 @@
-use smol::Executor;
-
 #[smol_potat::main]
 async fn main() {
-    let ex = Executor::new();
-
-    ex.run(async {
+    smol::spawn(async {
         println!("Hello, world!");
     })
     .await;
