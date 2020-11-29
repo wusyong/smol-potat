@@ -124,7 +124,7 @@ pub fn main(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             #set_threads
 
-            #crate_root::async_io::block_on(main());
+            #crate_root::async_io::block_on(main())
         }
     };
 
